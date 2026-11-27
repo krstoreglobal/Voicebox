@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "946471656063",
+    "project_id": "voicebox-58125",
+    "storage_bucket": "voicebox-58125.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946471656063:android:55b95bb4534fa42f32bd4a",
+        "android_client_info": {
+          "package_name": "com.vb.voicebox"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD7a3GxJz1gSs1NOr9H6ILlVI_WO-aE8ZQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
