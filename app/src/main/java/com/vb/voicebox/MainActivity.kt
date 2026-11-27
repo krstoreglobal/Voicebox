@@ -1,6 +1,7 @@
 
 package com.vb.voicebox
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,7 +20,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import org.json.JSONArray
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,7 +50,10 @@ fun VoiceboxApp() {
         },
         bottomBar = {
             NavigationBar {
-                val tabs = listOf("Chats", "Groups", "Calls", "Status", "Profile")
+                val tabs = listOf(
+                    "Chats", "Groups", "Calls", "Status", "Profile"
+                )
+
                 val icons = listOf(
                     Icons.Filled.Chat,
                     Icons.Filled.Groups,
@@ -168,20 +174,14 @@ fun GroupCard(
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp)
-        ) {
+        Column(modifier = Modifier.padding(18.dp)) {
             Text(
                 name,
                 style = MaterialTheme.typography.titleMedium
             )
 
             Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text(message)
 
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -199,15 +199,39 @@ fun GroupChatScreen(
     groupName: String,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+
+    val prefs = remember(context) {
+        context.getSharedPreferences(
+            "vb_chat_messages",
+            Context.MODE_PRIVATE
+        )
+    }
+
     val messages = remember(groupName) {
-        mutableStateListOf("Welcome to $groupName!")
+        mutableStateListOf<String>().apply {
+            val saved = prefs.getString(groupName, null)
+
+            if (saved != null) {
+                try {
+                    val jsonArray = JSONArray(saved)
+
+                    for (i in 0 until jsonArray.length()) {
+                        add(jsonArray.getString(i))
+                    }
+                } catch (_: Exception) {
+                    add("Welcome to $groupName!")
+                }
+            } else {
+                add("Welcome to $groupName!")
+            }
+        }
     }
 
     var messageText by remember { mutableStateOf("") }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+
         TextButton(onClick = onBack) {
             Text("← Back to groups")
         }
@@ -233,9 +257,7 @@ fun GroupChatScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(messages) { message ->
-                Card(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Card(modifier = Modifier.fillMaxWidth()) {
                     Text(
                         message,
                         modifier = Modifier.padding(14.dp)
@@ -262,6 +284,14 @@ fun GroupChatScreen(
                 onClick = {
                     if (messageText.isNotBlank()) {
                         messages.add("You: ${messageText.trim()}")
+
+                        val jsonArray = JSONArray()
+                        messages.forEach { jsonArray.put(it) }
+
+                        prefs.edit()
+                            .putString(groupName, jsonArray.toString())
+                            .apply()
+
                         messageText = ""
                     }
                 }
