@@ -39,6 +39,66 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceboxApp() {
+    val context = LocalContext.current
+
+    val prefs = remember(context) {
+        context.getSharedPreferences("vb_chat_messages", Context.MODE_PRIVATE)
+    }
+
+    val groups = remember(context) {
+        mutableStateListOf<String>().apply {
+            val saved = prefs.getString("group_list", null)
+
+            if (saved == null) {
+                addAll(listOf(
+                    "Family Group",
+                    "Friends Group",
+                    "VB Community"
+                ))
+
+                val array = JSONArray()
+                forEach { array.put(it) }
+
+                prefs.edit()
+                    .putString("group_list", array.toString())
+                    .apply()
+            } else {
+                try {
+                    val array = JSONArray(saved)
+                    for (i in 0 until array.length()) {
+                        add(array.getString(i))
+                    }
+                } catch (_: Exception) {
+                    addAll(listOf(
+                        "Family Group",
+                        "Friends Group",
+                        "VB Community"
+                    ))
+                }
+            }
+        }
+    }
+
+    fun saveGroups() {
+        val array = JSONArray()
+        groups.forEach { array.put(it) }
+
+        prefs.edit()
+            .putString("group_list", array.toString())
+            .apply()
+    }
+
+    fun addGroup(name: String) {
+        val cleanName = name.trim()
+
+        if (cleanName.isNotEmpty() &&
+            groups.none { it.equals(cleanName, ignoreCase = true) }
+        ) {
+            groups.add(cleanName)
+            saveGroups()
+        }
+    }
+
     var selectedTab by remember { mutableIntStateOf(0) }
     var openedGroup by remember { mutableStateOf<String?>(null) }
 
@@ -92,8 +152,17 @@ fun VoiceboxApp() {
                 )
             } else {
                 when (selectedTab) {
-                    0 -> ChatsScreen { openedGroup = it }
-                    1 -> GroupsScreen { openedGroup = it }
+                    0 -> ChatsScreen(groups) {
+                        openedGroup = it
+                    }
+
+                    1 -> GroupsScreen(
+                        groups = groups,
+                        onCreate = { addGroup(it) },
+                        onJoin = { addGroup(it) },
+                        onGroupClick = { openedGroup = it }
+                    )
+
                     2 -> SimpleScreen("Voice and video calls")
                     3 -> SimpleScreen("Personal and group status")
                     4 -> SimpleScreen("Your VB profile")
@@ -104,7 +173,10 @@ fun VoiceboxApp() {
 }
 
 @Composable
-fun ChatsScreen(onGroupClick: (String) -> Unit) {
+fun ChatsScreen(
+    groups: List<String>,
+    onGroupClick: (String) -> Unit
+) {
     Column {
         Text(
             "Welcome to VB",
@@ -123,22 +195,25 @@ fun ChatsScreen(onGroupClick: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        GroupCard("Family Group", "Welcome to Voicebox!") {
-            onGroupClick("Family Group")
-        }
-
-        GroupCard("Friends Group", "Let's talk together.") {
-            onGroupClick("Friends Group")
-        }
-
-        GroupCard("VB Community", "Share your voice.") {
-            onGroupClick("VB Community")
+        groups.forEach { group ->
+            GroupCard(group, "Group conversation") {
+                onGroupClick(group)
+            }
         }
     }
 }
 
 @Composable
-fun GroupsScreen(onGroupClick: (String) -> Unit) {
+fun GroupsScreen(
+    groups: List<String>,
+    onCreate: (String) -> Unit,
+    onJoin: (String) -> Unit,
+    onGroupClick: (String) -> Unit
+) {
+    var showCreate by remember { mutableStateOf(false) }
+    var showJoin by remember { mutableStateOf(false) }
+    var groupName by remember { mutableStateOf("") }
+
     Column {
         Text(
             "Your Groups",
@@ -147,17 +222,108 @@ fun GroupsScreen(onGroupClick: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        GroupCard("Family Group", "Family conversations") {
-            onGroupClick("Family Group")
+        Button(
+            onClick = {
+                groupName = ""
+                showCreate = true
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("+ Create New Group")
         }
 
-        GroupCard("Friends Group", "Friends and sharing") {
-            onGroupClick("Friends Group")
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = {
+                groupName = ""
+                showJoin = true
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Join Group")
         }
 
-        GroupCard("VB Community", "Community discussions") {
-            onGroupClick("VB Community")
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            "Your group conversations",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        groups.forEach { group ->
+            GroupCard(group, "Open group conversation") {
+                onGroupClick(group)
+            }
         }
+    }
+
+    if (showCreate) {
+        AlertDialog(
+            onDismissRequest = { showCreate = false },
+            title = { Text("Create New Group") },
+            text = {
+                OutlinedTextField(
+                    value = groupName,
+                    onValueChange = { groupName = it },
+                    label = { Text("Group Name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (groupName.isNotBlank()) {
+                            onCreate(groupName)
+                            showCreate = false
+                            groupName = ""
+                        }
+                    }
+                ) {
+                    Text("Create")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCreate = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showJoin) {
+        AlertDialog(
+            onDismissRequest = { showJoin = false },
+            title = { Text("Join Group") },
+            text = {
+                OutlinedTextField(
+                    value = groupName,
+                    onValueChange = { groupName = it },
+                    label = { Text("Enter Group Name") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (groupName.isNotBlank()) {
+                            onJoin(groupName)
+                            showJoin = false
+                            groupName = ""
+                        }
+                    }
+                ) {
+                    Text("Join")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJoin = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
@@ -214,10 +380,9 @@ fun GroupChatScreen(
 
             if (saved != null) {
                 try {
-                    val jsonArray = JSONArray(saved)
-
-                    for (i in 0 until jsonArray.length()) {
-                        add(jsonArray.getString(i))
+                    val array = JSONArray(saved)
+                    for (i in 0 until array.length()) {
+                        add(array.getString(i))
                     }
                 } catch (_: Exception) {
                     add("Welcome to $groupName!")
@@ -231,7 +396,6 @@ fun GroupChatScreen(
     var messageText by remember { mutableStateOf("") }
 
     Column(modifier = Modifier.fillMaxSize()) {
-
         TextButton(onClick = onBack) {
             Text("← Back to groups")
         }
@@ -285,11 +449,11 @@ fun GroupChatScreen(
                     if (messageText.isNotBlank()) {
                         messages.add("You: ${messageText.trim()}")
 
-                        val jsonArray = JSONArray()
-                        messages.forEach { jsonArray.put(it) }
+                        val array = JSONArray()
+                        messages.forEach { array.put(it) }
 
                         prefs.edit()
-                            .putString(groupName, jsonArray.toString())
+                            .putString(groupName, array.toString())
                             .apply()
 
                         messageText = ""
