@@ -4,9 +4,11 @@ package com.vb.voicebox
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
@@ -35,59 +37,38 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun VoiceboxApp() {
     var selectedTab by remember { mutableIntStateOf(0) }
-
-    val tabs = listOf(
-        "Chats",
-        "Groups",
-        "Calls",
-        "Status",
-        "Profile"
-    )
+    var openedGroup by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Text("VB - Voicebox")
-                }
+                title = { Text("VB - Voicebox") }
             )
         },
         bottomBar = {
             NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Filled.Chat, contentDescription = "Chats") },
-                    label = { Text("Chats") }
+                val tabs = listOf("Chats", "Groups", "Calls", "Status", "Profile")
+                val icons = listOf(
+                    Icons.Filled.Chat,
+                    Icons.Filled.Groups,
+                    Icons.Filled.Call,
+                    Icons.Filled.CameraAlt,
+                    Icons.Filled.Person
                 )
 
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Filled.Groups, contentDescription = "Groups") },
-                    label = { Text("Groups") }
-                )
-
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Filled.Call, contentDescription = "Calls") },
-                    label = { Text("Calls") }
-                )
-
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.Filled.CameraAlt, contentDescription = "Status") },
-                    label = { Text("Status") }
-                )
-
-                NavigationBarItem(
-                    selected = selectedTab == 4,
-                    onClick = { selectedTab = 4 },
-                    icon = { Icon(Icons.Filled.Person, contentDescription = "Profile") },
-                    label = { Text("Profile") }
-                )
+                tabs.forEachIndexed { index, tab ->
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = {
+                            selectedTab = index
+                            openedGroup = null
+                        },
+                        icon = {
+                            Icon(icons[index], contentDescription = tab)
+                        },
+                        label = { Text(tab) }
+                    )
+                }
             }
         }
     ) { padding ->
@@ -98,81 +79,195 @@ fun VoiceboxApp() {
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            when (selectedTab) {
-                0 -> ChatsScreen()
-                1 -> GroupsScreen()
-                2 -> SimpleScreen("Voice and video calls")
-                3 -> SimpleScreen("Personal and group status")
-                4 -> SimpleScreen("Your VB profile")
+            if (openedGroup != null) {
+                GroupChatScreen(
+                    groupName = openedGroup!!,
+                    onBack = { openedGroup = null }
+                )
+            } else {
+                when (selectedTab) {
+                    0 -> ChatsScreen { openedGroup = it }
+                    1 -> GroupsScreen { openedGroup = it }
+                    2 -> SimpleScreen("Voice and video calls")
+                    3 -> SimpleScreen("Personal and group status")
+                    4 -> SimpleScreen("Your VB profile")
+                }
             }
         }
     }
 }
 
 @Composable
-fun ChatsScreen() {
+fun ChatsScreen(onGroupClick: (String) -> Unit) {
     Column {
         Text(
-            text = "Welcome to VB",
+            "Welcome to VB",
             style = MaterialTheme.typography.headlineMedium
         )
 
         Spacer(modifier = Modifier.height(8.dp))
-
         Text("Your voice. Your groups. Your world.")
 
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            text = "Recent conversations",
+            "Recent conversations",
             style = MaterialTheme.typography.titleLarge
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        GroupCard("Family Group", "Welcome to Voicebox!")
-        GroupCard("Friends Group", "Let's talk together.")
-        GroupCard("VB Community", "Share your voice.")
+        GroupCard("Family Group", "Welcome to Voicebox!") {
+            onGroupClick("Family Group")
+        }
+
+        GroupCard("Friends Group", "Let's talk together.") {
+            onGroupClick("Friends Group")
+        }
+
+        GroupCard("VB Community", "Share your voice.") {
+            onGroupClick("VB Community")
+        }
     }
 }
 
 @Composable
-fun GroupsScreen() {
+fun GroupsScreen(onGroupClick: (String) -> Unit) {
     Column {
         Text(
-            text = "Your Groups",
+            "Your Groups",
             style = MaterialTheme.typography.headlineMedium
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        GroupCard("Family Group", "Family conversations")
-        GroupCard("Friends Group", "Friends and sharing")
-        GroupCard("VB Community", "Community discussions")
+        GroupCard("Family Group", "Family conversations") {
+            onGroupClick("Family Group")
+        }
+
+        GroupCard("Friends Group", "Friends and sharing") {
+            onGroupClick("Friends Group")
+        }
+
+        GroupCard("VB Community", "Community discussions") {
+            onGroupClick("VB Community")
+        }
     }
 }
 
 @Composable
-fun GroupCard(name: String, message: String) {
+fun GroupCard(
+    name: String,
+    message: String,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(18.dp)
         ) {
             Text(
-                text = name,
+                name,
                 style = MaterialTheme.typography.titleMedium
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             Text(
-                text = message,
+                message,
                 style = MaterialTheme.typography.bodyMedium
             )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                "Tap to open conversation",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+fun GroupChatScreen(
+    groupName: String,
+    onBack: () -> Unit
+) {
+    val messages = remember(groupName) {
+        mutableStateListOf("Welcome to $groupName!")
+    }
+
+    var messageText by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        TextButton(onClick = onBack) {
+            Text("← Back to groups")
+        }
+
+        Text(
+            groupName,
+            style = MaterialTheme.typography.headlineSmall
+        )
+
+        Text(
+            "Group conversation",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = 12.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(messages) { message ->
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        message,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = messageText,
+                onValueChange = { messageText = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text("Write a message...") },
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(
+                onClick = {
+                    if (messageText.isNotBlank()) {
+                        messages.add("You: ${messageText.trim()}")
+                        messageText = ""
+                    }
+                }
+            ) {
+                Text("Send")
+            }
         }
     }
 }
@@ -184,7 +279,7 @@ fun SimpleScreen(title: String) {
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = title,
+            title,
             style = MaterialTheme.typography.headlineSmall
         )
     }
