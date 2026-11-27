@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.vb.voicebox"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -42,7 +42,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Firebase
     implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
     implementation("com.google.firebase:firebase-auth")
 
