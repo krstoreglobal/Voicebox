@@ -2,9 +2,12 @@
 package com.vb.voicebox
 
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +37,101 @@ class MainActivity : ComponentActivity() {
                 VoiceboxApp()
             }
         }
+    }
+}
+
+fun createBackup(
+    prefs: android.content.SharedPreferences,
+    groups: List<String>
+): String {
+    val backup = JSONObject()
+    val groupArray = JSONArray()
+    val messagesObject = JSONObject()
+
+    groups.forEach { group ->
+        groupArray.put(group)
+
+        val savedMessages = prefs.getString(group, null)
+
+        if (savedMessages != null) {
+            try {
+                messagesObject.put(
+                    group,
+                    JSONArray(savedMessages)
+                )
+            } catch (_: Exception) {
+                messagesObject.put(group, JSONArray())
+            }
+        }
+    }
+
+    backup.put("app", "VB")
+    backup.put("version", 1)
+    backup.put("groups", groupArray)
+    backup.put("messages", messagesObject)
+
+    return backup.toString(2)
+}
+
+fun restoreBackup(
+    prefs: android.content.SharedPreferences,
+    groups: androidx.compose.runtime.snapshots.SnapshotStateList<String>,
+    backupText: String
+): Boolean {
+    return try {
+        val backup = JSONObject(backupText)
+        val groupArray = backup.optJSONArray("groups")
+            ?: return false
+
+        val messagesObject = backup.optJSONObject("messages")
+            ?: JSONObject()
+
+        val restoredGroups = mutableListOf<String>()
+
+        for (i in 0 until groupArray.length()) {
+            val name = groupArray.getString(i).trim()
+
+            if (
+                name.isNotEmpty() &&
+                restoredGroups.none {
+                    it.equals(name, ignoreCase = true)
+                }
+            ) {
+                restoredGroups.add(name)
+            }
+        }
+
+        if (restoredGroups.isEmpty()) return false
+
+        val editor = prefs.edit()
+
+        val savedGroups = JSONArray()
+        restoredGroups.forEach {
+            savedGroups.put(it)
+        }
+
+        editor.putString("group_list", savedGroups.toString())
+
+        restoredGroups.forEach { group ->
+            val messageArray =
+                messagesObject.optJSONArray(group)
+
+            if (messageArray != null) {
+                editor.putString(
+                    group,
+                    messageArray.toString()
+                )
+            }
+        }
+
+        editor.apply()
+
+        groups.clear()
+        groups.addAll(restoredGroups)
+
+        true
+    } catch (_: Exception) {
+        false
     }
 }
 
@@ -118,8 +217,72 @@ fun VoiceboxApp() {
         mutableStateOf<String?>(null)
     }
 
-    // Create an observable snapshot of the groups.
+    var backupStatus by remember {
+        mutableStateOf("")
+    }
+
+    var pendingBackup by remember {
+        mutableStateOf("")
+    }
+
     val groupSnapshot = groups.toList()
+
+    val backupLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.CreateDocument(
+                "application/json"
+            )
+        ) { uri: Uri? ->
+
+            if (uri != null) {
+                backupStatus = try {
+                    context.contentResolver
+                        .openOutputStream(uri)
+                        ?.bufferedWriter()
+                        ?.use {
+                            it.write(pendingBackup)
+                        }
+                        ?: throw Exception("Could not save file")
+
+                    "Backup saved successfully!"
+                } catch (e: Exception) {
+                    "Backup failed: ${e.message}"
+                }
+            }
+        }
+
+    val restoreLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument()
+        ) { uri: Uri? ->
+
+            if (uri != null) {
+                backupStatus = try {
+                    val backupText =
+                        context.contentResolver
+                            .openInputStream(uri)
+                            ?.bufferedReader()
+                            ?.use { it.readText() }
+                            ?: throw Exception("Could not open file")
+
+                    if (
+                        restoreBackup(
+                            prefs,
+                            groups,
+                            backupText
+                        )
+                    ) {
+                        openedGroup = null
+                        selectedTab = 1
+                        "Backup restored successfully!"
+                    } else {
+                        "Invalid or empty VB backup file."
+                    }
+                } catch (e: Exception) {
+                    "Restore failed: ${e.message}"
+                }
+            }
+        }
 
     Scaffold(
         topBar = {
@@ -205,11 +368,85 @@ fun VoiceboxApp() {
                     )
 
                     2 -> SimpleScreen("Voice and video calls")
+
                     3 -> SimpleScreen("Personal and group status")
-                    4 -> SimpleScreen("Your VB profile")
+
+                    4 -> ProfileScreen(
+                        backupStatus = backupStatus,
+                        onBackup = {
+                            pendingBackup = createBackup(
+                                prefs,
+                                groups.toList()
+                            )
+                            backupLauncher.launch("VB_Backup.json")
+                        },
+                        onRestore = {
+                            restoreLauncher.launch(
+                                arrayOf(
+                                    "application/json",
+                                    "text/*",
+                                    "*/*"
+                                )
+                            )
+                        }
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+fun ProfileScreen(
+    backupStatus: String,
+    onBackup: () -> Unit,
+    onRestore: () -> Unit
+) {
+    Column {
+        Text(
+            "Your VB profile",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            "Backup and Restore",
+            style = MaterialTheme.typography.titleLarge
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(
+            onClick = onBackup,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Save VB Backup")
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onRestore,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Restore VB Backup")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (backupStatus.isNotEmpty()) {
+            Text(
+                backupStatus,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            "Keep your backup file private. It contains your saved group names and messages."
+        )
     }
 }
 
