@@ -42,7 +42,10 @@ fun VoiceboxApp() {
     val context = LocalContext.current
 
     val prefs = remember(context) {
-        context.getSharedPreferences("vb_chat_messages", Context.MODE_PRIVATE)
+        context.getSharedPreferences(
+            "vb_chat_messages",
+            Context.MODE_PRIVATE
+        )
     }
 
     val groups = remember(context) {
@@ -50,11 +53,13 @@ fun VoiceboxApp() {
             val saved = prefs.getString("group_list", null)
 
             if (saved == null) {
-                addAll(listOf(
-                    "Family Group",
-                    "Friends Group",
-                    "VB Community"
-                ))
+                addAll(
+                    listOf(
+                        "Family Group",
+                        "Friends Group",
+                        "VB Community"
+                    )
+                )
 
                 val array = JSONArray()
                 forEach { array.put(it) }
@@ -65,15 +70,18 @@ fun VoiceboxApp() {
             } else {
                 try {
                     val array = JSONArray(saved)
+
                     for (i in 0 until array.length()) {
                         add(array.getString(i))
                     }
                 } catch (_: Exception) {
-                    addAll(listOf(
-                        "Family Group",
-                        "Friends Group",
-                        "VB Community"
-                    ))
+                    addAll(
+                        listOf(
+                            "Family Group",
+                            "Friends Group",
+                            "VB Community"
+                        )
+                    )
                 }
             }
         }
@@ -91,27 +99,44 @@ fun VoiceboxApp() {
     fun addGroup(name: String) {
         val cleanName = name.trim()
 
-        if (cleanName.isNotEmpty() &&
-            groups.none { it.equals(cleanName, ignoreCase = true) }
+        if (
+            cleanName.isNotEmpty() &&
+            groups.none {
+                it.equals(cleanName, ignoreCase = true)
+            }
         ) {
             groups.add(cleanName)
             saveGroups()
         }
     }
 
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var openedGroup by remember { mutableStateOf<String?>(null) }
+    var selectedTab by remember {
+        mutableIntStateOf(0)
+    }
+
+    var openedGroup by remember {
+        mutableStateOf<String?>(null)
+    }
+
+    // Create an observable snapshot of the groups.
+    val groupSnapshot = groups.toList()
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("VB - Voicebox") }
+                title = {
+                    Text("VB - Voicebox")
+                }
             )
         },
         bottomBar = {
             NavigationBar {
                 val tabs = listOf(
-                    "Chats", "Groups", "Calls", "Status", "Profile"
+                    "Chats",
+                    "Groups",
+                    "Calls",
+                    "Status",
+                    "Profile"
                 )
 
                 val icons = listOf(
@@ -130,9 +155,14 @@ fun VoiceboxApp() {
                             openedGroup = null
                         },
                         icon = {
-                            Icon(icons[index], contentDescription = tab)
+                            Icon(
+                                icons[index],
+                                contentDescription = tab
+                            )
                         },
-                        label = { Text(tab) }
+                        label = {
+                            Text(tab)
+                        }
                     )
                 }
             }
@@ -148,19 +178,30 @@ fun VoiceboxApp() {
             if (openedGroup != null) {
                 GroupChatScreen(
                     groupName = openedGroup!!,
-                    onBack = { openedGroup = null }
+                    onBack = {
+                        openedGroup = null
+                    }
                 )
             } else {
                 when (selectedTab) {
-                    0 -> ChatsScreen(groups) {
-                        openedGroup = it
-                    }
+                    0 -> ChatsScreen(
+                        groups = groupSnapshot,
+                        onGroupClick = {
+                            openedGroup = it
+                        }
+                    )
 
                     1 -> GroupsScreen(
-                        groups = groups,
-                        onCreate = { addGroup(it) },
-                        onJoin = { addGroup(it) },
-                        onGroupClick = { openedGroup = it }
+                        groups = groupSnapshot,
+                        onCreate = {
+                            addGroup(it)
+                        },
+                        onJoin = {
+                            addGroup(it)
+                        },
+                        onGroupClick = {
+                            openedGroup = it
+                        }
                     )
 
                     2 -> SimpleScreen("Voice and video calls")
@@ -184,6 +225,7 @@ fun ChatsScreen(
         )
 
         Spacer(modifier = Modifier.height(8.dp))
+
         Text("Your voice. Your groups. Your world.")
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -196,7 +238,10 @@ fun ChatsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         groups.forEach { group ->
-            GroupCard(group, "Group conversation") {
+            GroupCard(
+                name = group,
+                message = "Group conversation"
+            ) {
                 onGroupClick(group)
             }
         }
@@ -210,9 +255,17 @@ fun GroupsScreen(
     onJoin: (String) -> Unit,
     onGroupClick: (String) -> Unit
 ) {
-    var showCreate by remember { mutableStateOf(false) }
-    var showJoin by remember { mutableStateOf(false) }
-    var groupName by remember { mutableStateOf("") }
+    var showCreate by remember {
+        mutableStateOf(false)
+    }
+
+    var showJoin by remember {
+        mutableStateOf(false)
+    }
+
+    var groupName by remember {
+        mutableStateOf("")
+    }
 
     Column {
         Text(
@@ -254,7 +307,10 @@ fun GroupsScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         groups.forEach { group ->
-            GroupCard(group, "Open group conversation") {
+            GroupCard(
+                name = group,
+                message = "Open group conversation"
+            ) {
                 onGroupClick(group)
             }
         }
@@ -262,13 +318,21 @@ fun GroupsScreen(
 
     if (showCreate) {
         AlertDialog(
-            onDismissRequest = { showCreate = false },
-            title = { Text("Create New Group") },
+            onDismissRequest = {
+                showCreate = false
+            },
+            title = {
+                Text("Create New Group")
+            },
             text = {
                 OutlinedTextField(
                     value = groupName,
-                    onValueChange = { groupName = it },
-                    label = { Text("Group Name") },
+                    onValueChange = {
+                        groupName = it
+                    },
+                    label = {
+                        Text("Group Name")
+                    },
                     singleLine = true
                 )
             },
@@ -286,7 +350,11 @@ fun GroupsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showCreate = false }) {
+                TextButton(
+                    onClick = {
+                        showCreate = false
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
@@ -295,13 +363,21 @@ fun GroupsScreen(
 
     if (showJoin) {
         AlertDialog(
-            onDismissRequest = { showJoin = false },
-            title = { Text("Join Group") },
+            onDismissRequest = {
+                showJoin = false
+            },
+            title = {
+                Text("Join Group")
+            },
             text = {
                 OutlinedTextField(
                     value = groupName,
-                    onValueChange = { groupName = it },
-                    label = { Text("Enter Group Name") },
+                    onValueChange = {
+                        groupName = it
+                    },
+                    label = {
+                        Text("Enter Group Name")
+                    },
                     singleLine = true
                 )
             },
@@ -319,7 +395,11 @@ fun GroupsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showJoin = false }) {
+                TextButton(
+                    onClick = {
+                        showJoin = false
+                    }
+                ) {
                     Text("Cancel")
                 }
             }
@@ -337,16 +417,21 @@ fun GroupCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .clickable { onClick() },
+            .clickable {
+                onClick()
+            },
         shape = RoundedCornerShape(16.dp)
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
             Text(
                 name,
                 style = MaterialTheme.typography.titleMedium
             )
 
             Spacer(modifier = Modifier.height(6.dp))
+
             Text(message)
 
             Spacer(modifier = Modifier.height(6.dp))
@@ -381,6 +466,7 @@ fun GroupChatScreen(
             if (saved != null) {
                 try {
                     val array = JSONArray(saved)
+
                     for (i in 0 until array.length()) {
                         add(array.getString(i))
                     }
@@ -393,10 +479,16 @@ fun GroupChatScreen(
         }
     }
 
-    var messageText by remember { mutableStateOf("") }
+    var messageText by remember {
+        mutableStateOf("")
+    }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TextButton(onClick = onBack) {
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        TextButton(
+            onClick = onBack
+        ) {
             Text("← Back to groups")
         }
 
@@ -421,7 +513,9 @@ fun GroupChatScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(messages) { message ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(
                         message,
                         modifier = Modifier.padding(14.dp)
@@ -436,9 +530,13 @@ fun GroupChatScreen(
         ) {
             OutlinedTextField(
                 value = messageText,
-                onValueChange = { messageText = it },
+                onValueChange = {
+                    messageText = it
+                },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Write a message...") },
+                placeholder = {
+                    Text("Write a message...")
+                },
                 singleLine = true
             )
 
@@ -447,13 +545,20 @@ fun GroupChatScreen(
             Button(
                 onClick = {
                     if (messageText.isNotBlank()) {
-                        messages.add("You: ${messageText.trim()}")
+                        messages.add(
+                            "You: ${messageText.trim()}"
+                        )
 
                         val array = JSONArray()
-                        messages.forEach { array.put(it) }
+                        messages.forEach {
+                            array.put(it)
+                        }
 
                         prefs.edit()
-                            .putString(groupName, array.toString())
+                            .putString(
+                                groupName,
+                                array.toString()
+                            )
                             .apply()
 
                         messageText = ""
