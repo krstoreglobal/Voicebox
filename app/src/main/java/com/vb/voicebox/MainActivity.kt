@@ -1,4 +1,3 @@
-
 package com.vb.voicebox
 
 import android.content.Context
@@ -55,10 +54,7 @@ fun createBackup(
 
         if (savedMessages != null) {
             try {
-                messagesObject.put(
-                    group,
-                    JSONArray(savedMessages)
-                )
+                messagesObject.put(group, JSONArray(savedMessages))
             } catch (_: Exception) {
                 messagesObject.put(group, JSONArray())
             }
@@ -83,8 +79,8 @@ fun restoreBackup(
         val groupArray = backup.optJSONArray("groups")
             ?: return false
 
-        val messagesObject = backup.optJSONObject("messages")
-            ?: JSONObject()
+        val messagesObject =
+            backup.optJSONObject("messages") ?: JSONObject()
 
         val restoredGroups = mutableListOf<String>()
 
@@ -104,26 +100,19 @@ fun restoreBackup(
         if (restoredGroups.isEmpty()) return false
 
         val editor = prefs.edit()
-
         val savedGroups = JSONArray()
-        restoredGroups.forEach {
-            savedGroups.put(it)
-        }
-
-        editor.putString("group_list", savedGroups.toString())
 
         restoredGroups.forEach { group ->
-            val messageArray =
-                messagesObject.optJSONArray(group)
+            savedGroups.put(group)
+
+            val messageArray = messagesObject.optJSONArray(group)
 
             if (messageArray != null) {
-                editor.putString(
-                    group,
-                    messageArray.toString()
-                )
+                editor.putString(group, messageArray.toString())
             }
         }
 
+        editor.putString("group_list", savedGroups.toString())
         editor.apply()
 
         groups.clear()
@@ -171,7 +160,11 @@ fun VoiceboxApp() {
                     val array = JSONArray(saved)
 
                     for (i in 0 until array.length()) {
-                        add(array.getString(i))
+                        val name = array.getString(i)
+
+                        if (none { it.equals(name, true) }) {
+                            add(name)
+                        }
                     }
                 } catch (_: Exception) {
                     addAll(
@@ -195,53 +188,36 @@ fun VoiceboxApp() {
             .apply()
     }
 
-    fun addGroup(name: String) {
+    fun addGroup(name: String): Boolean {
         val cleanName = name.trim()
 
         if (
-            cleanName.isNotEmpty() &&
-            groups.none {
-                it.equals(cleanName, ignoreCase = true)
-            }
+            cleanName.isEmpty() ||
+            groups.any { it.equals(cleanName, ignoreCase = true) }
         ) {
-            groups.add(cleanName)
-            saveGroups()
+            return false
         }
+
+        groups.add(cleanName)
+        saveGroups()
+        return true
     }
 
-    var selectedTab by remember {
-        mutableIntStateOf(0)
-    }
-
-    var openedGroup by remember {
-        mutableStateOf<String?>(null)
-    }
-
-    var backupStatus by remember {
-        mutableStateOf("")
-    }
-
-    var pendingBackup by remember {
-        mutableStateOf("")
-    }
-
-    val groupSnapshot = groups.toList()
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var openedGroup by remember { mutableStateOf<String?>(null) }
+    var backupStatus by remember { mutableStateOf("") }
+    var pendingBackup by remember { mutableStateOf("") }
 
     val backupLauncher =
         rememberLauncherForActivityResult(
-            ActivityResultContracts.CreateDocument(
-                "application/json"
-            )
+            ActivityResultContracts.CreateDocument("application/json")
         ) { uri: Uri? ->
-
             if (uri != null) {
                 backupStatus = try {
                     context.contentResolver
                         .openOutputStream(uri)
                         ?.bufferedWriter()
-                        ?.use {
-                            it.write(pendingBackup)
-                        }
+                        ?.use { it.write(pendingBackup) }
                         ?: throw Exception("Could not save file")
 
                     "Backup saved successfully!"
@@ -255,7 +231,6 @@ fun VoiceboxApp() {
         rememberLauncherForActivityResult(
             ActivityResultContracts.OpenDocument()
         ) { uri: Uri? ->
-
             if (uri != null) {
                 backupStatus = try {
                     val backupText =
@@ -265,13 +240,7 @@ fun VoiceboxApp() {
                             ?.use { it.readText() }
                             ?: throw Exception("Could not open file")
 
-                    if (
-                        restoreBackup(
-                            prefs,
-                            groups,
-                            backupText
-                        )
-                    ) {
+                    if (restoreBackup(prefs, groups, backupText)) {
                         openedGroup = null
                         selectedTab = 1
                         "Backup restored successfully!"
@@ -287,9 +256,7 @@ fun VoiceboxApp() {
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = {
-                    Text("VB - Voicebox")
-                }
+                title = { Text("VB - Voicebox") }
             )
         },
         bottomBar = {
@@ -318,14 +285,9 @@ fun VoiceboxApp() {
                             openedGroup = null
                         },
                         icon = {
-                            Icon(
-                                icons[index],
-                                contentDescription = tab
-                            )
+                            Icon(icons[index], contentDescription = tab)
                         },
-                        label = {
-                            Text(tab)
-                        }
+                        label = { Text(tab) }
                     )
                 }
             }
@@ -341,34 +303,23 @@ fun VoiceboxApp() {
             if (openedGroup != null) {
                 GroupChatScreen(
                     groupName = openedGroup!!,
-                    onBack = {
-                        openedGroup = null
-                    }
+                    onBack = { openedGroup = null }
                 )
             } else {
                 when (selectedTab) {
                     0 -> ChatsScreen(
-                        groups = groupSnapshot,
-                        onGroupClick = {
-                            openedGroup = it
-                        }
+                        groups = groups,
+                        onGroupClick = { openedGroup = it }
                     )
 
                     1 -> GroupsScreen(
-                        groups = groupSnapshot,
-                        onCreate = {
-                            addGroup(it)
-                        },
-                        onJoin = {
-                            addGroup(it)
-                        },
-                        onGroupClick = {
-                            openedGroup = it
-                        }
+                        groups = groups,
+                        onCreate = { addGroup(it) },
+                        onJoin = { addGroup(it) },
+                        onGroupClick = { openedGroup = it }
                     )
 
                     2 -> SimpleScreen("Voice and video calls")
-
                     3 -> SimpleScreen("Personal and group status")
 
                     4 -> ProfileScreen(
@@ -462,9 +413,7 @@ fun ChatsScreen(
         )
 
         Spacer(modifier = Modifier.height(8.dp))
-
         Text("Your voice. Your groups. Your world.")
-
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
@@ -474,12 +423,16 @@ fun ChatsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        groups.forEach { group ->
-            GroupCard(
-                name = group,
-                message = "Group conversation"
-            ) {
-                onGroupClick(group)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(groups, key = { it }) { group ->
+                GroupCard(
+                    name = group,
+                    message = "Group conversation"
+                ) {
+                    onGroupClick(group)
+                }
             }
         }
     }
@@ -488,21 +441,14 @@ fun ChatsScreen(
 @Composable
 fun GroupsScreen(
     groups: List<String>,
-    onCreate: (String) -> Unit,
-    onJoin: (String) -> Unit,
+    onCreate: (String) -> Boolean,
+    onJoin: (String) -> Boolean,
     onGroupClick: (String) -> Unit
 ) {
-    var showCreate by remember {
-        mutableStateOf(false)
-    }
-
-    var showJoin by remember {
-        mutableStateOf(false)
-    }
-
-    var groupName by remember {
-        mutableStateOf("")
-    }
+    var showCreate by remember { mutableStateOf(false) }
+    var showJoin by remember { mutableStateOf(false) }
+    var groupName by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
 
     Column {
         Text(
@@ -515,6 +461,7 @@ fun GroupsScreen(
         Button(
             onClick = {
                 groupName = ""
+                errorMessage = ""
                 showCreate = true
             },
             modifier = Modifier.fillMaxWidth()
@@ -527,6 +474,7 @@ fun GroupsScreen(
         OutlinedButton(
             onClick = {
                 groupName = ""
+                errorMessage = ""
                 showJoin = true
             },
             modifier = Modifier.fillMaxWidth()
@@ -543,43 +491,58 @@ fun GroupsScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        groups.forEach { group ->
-            GroupCard(
-                name = group,
-                message = "Open group conversation"
-            ) {
-                onGroupClick(group)
+        LazyColumn(
+            modifier = Modifier.weight(1f)
+        ) {
+            items(groups, key = { it }) { group ->
+                GroupCard(
+                    name = group,
+                    message = "Open group conversation"
+                ) {
+                    onGroupClick(group)
+                }
             }
         }
     }
 
     if (showCreate) {
         AlertDialog(
-            onDismissRequest = {
-                showCreate = false
-            },
-            title = {
-                Text("Create New Group")
-            },
+            onDismissRequest = { showCreate = false },
+            title = { Text("Create New Group") },
             text = {
-                OutlinedTextField(
-                    value = groupName,
-                    onValueChange = {
-                        groupName = it
-                    },
-                    label = {
-                        Text("Group Name")
-                    },
-                    singleLine = true
-                )
+                Column {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = {
+                            groupName = it
+                            errorMessage = ""
+                        },
+                        label = { Text("Group Name") },
+                        singleLine = true
+                    )
+
+                    if (errorMessage.isNotEmpty()) {
+                        Text(
+                            errorMessage,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         if (groupName.isNotBlank()) {
-                            onCreate(groupName)
-                            showCreate = false
-                            groupName = ""
+                            if (onCreate(groupName)) {
+                                showCreate = false
+                                groupName = ""
+                                errorMessage = ""
+                            } else {
+                                errorMessage =
+                                    "This group already exists or the name is empty."
+                            }
+                        } else {
+                            errorMessage = "Please enter a group name."
                         }
                     }
                 ) {
@@ -587,11 +550,7 @@ fun GroupsScreen(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showCreate = false
-                    }
-                ) {
+                TextButton(onClick = { showCreate = false }) {
                     Text("Cancel")
                 }
             }
@@ -600,31 +559,42 @@ fun GroupsScreen(
 
     if (showJoin) {
         AlertDialog(
-            onDismissRequest = {
-                showJoin = false
-            },
-            title = {
-                Text("Join Group")
-            },
+            onDismissRequest = { showJoin = false },
+            title = { Text("Join Group") },
             text = {
-                OutlinedTextField(
-                    value = groupName,
-                    onValueChange = {
-                        groupName = it
-                    },
-                    label = {
-                        Text("Enter Group Name")
-                    },
-                    singleLine = true
-                )
+                Column {
+                    OutlinedTextField(
+                        value = groupName,
+                        onValueChange = {
+                            groupName = it
+                            errorMessage = ""
+                        },
+                        label = { Text("Enter Group Name") },
+                        singleLine = true
+                    )
+
+                    if (errorMessage.isNotEmpty()) {
+                        Text(
+                            errorMessage,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         if (groupName.isNotBlank()) {
-                            onJoin(groupName)
-                            showJoin = false
-                            groupName = ""
+                            if (onJoin(groupName)) {
+                                showJoin = false
+                                groupName = ""
+                                errorMessage = ""
+                            } else {
+                                errorMessage =
+                                    "This group already exists or the name is empty."
+                            }
+                        } else {
+                            errorMessage = "Please enter a group name."
                         }
                     }
                 ) {
@@ -632,11 +602,7 @@ fun GroupsScreen(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showJoin = false
-                    }
-                ) {
+                TextButton(onClick = { showJoin = false }) {
                     Text("Cancel")
                 }
             }
@@ -654,9 +620,7 @@ fun GroupCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .clickable {
-                onClick()
-            },
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp)
     ) {
         Column(
@@ -668,9 +632,7 @@ fun GroupCard(
             )
 
             Spacer(modifier = Modifier.height(6.dp))
-
             Text(message)
-
             Spacer(modifier = Modifier.height(6.dp))
 
             Text(
@@ -716,16 +678,12 @@ fun GroupChatScreen(
         }
     }
 
-    var messageText by remember {
-        mutableStateOf("")
-    }
+    var messageText by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        TextButton(
-            onClick = onBack
-        ) {
+        TextButton(onClick = onBack) {
             Text("← Back to groups")
         }
 
@@ -755,7 +713,7 @@ fun GroupChatScreen(
                 ) {
                     Text(
                         message,
-                        modifier = Modifier.padding(14.dp)
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
             }
@@ -767,9 +725,7 @@ fun GroupChatScreen(
         ) {
             OutlinedTextField(
                 value = messageText,
-                onValueChange = {
-                    messageText = it
-                },
+                onValueChange = { messageText = it },
                 modifier = Modifier.weight(1f),
                 placeholder = {
                     Text("Write a message...")
@@ -782,20 +738,13 @@ fun GroupChatScreen(
             Button(
                 onClick = {
                     if (messageText.isNotBlank()) {
-                        messages.add(
-                            "You: ${messageText.trim()}"
-                        )
+                        messages.add("You: ${messageText.trim()}")
 
                         val array = JSONArray()
-                        messages.forEach {
-                            array.put(it)
-                        }
+                        messages.forEach { array.put(it) }
 
                         prefs.edit()
-                            .putString(
-                                groupName,
-                                array.toString()
-                            )
+                            .putString(groupName, array.toString())
                             .apply()
 
                         messageText = ""
