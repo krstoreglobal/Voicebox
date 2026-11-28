@@ -26,8 +26,26 @@ jobs:
       - name: Restore permanent VB debug signing key
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: vb-debug-signing-key-v1
+          path: ~/.config/.android/debug.keystore
+          key: vb-debug-signing-key-v2
+
+      - name: Create permanent VB debug signing key if missing
+        shell: bash
+        run: |
+          KEYSTORE="$HOME/.config/.android/debug.keystore"
+          mkdir -p "$(dirname "$KEYSTORE")"
+
+          if [ ! -f "$KEYSTORE" ]; then
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -storepass android \
+              -alias AndroidDebugKey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
       - name: Accept Android SDK licenses
         shell: bash
