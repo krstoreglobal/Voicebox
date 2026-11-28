@@ -1,6 +1,9 @@
+
 package com.vb.voicebox
 
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
@@ -23,9 +27,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +46,17 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+fun Context.findActivity(): Activity? {
+    var current: Context? = this
+
+    while (current != null) {
+        if (current is Activity) return current
+        current = (current as? ContextWrapper)?.baseContext
+    }
+
+    return null
 }
 
 fun createBackup(
@@ -124,9 +144,280 @@ fun restoreBackup(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VoiceboxApp() {
+    val auth = remember { FirebaseAuth.getInstance() }
+
+    var isSignedIn by remember {
+        mutableStateOf(auth.currentUser != null)
+    }
+
+    if (!isSignedIn) {
+        PhoneLoginScreen(
+            onSignedIn = { isSignedIn = true }
+        )
+    } else {
+        MainVBScreen()
+    }
+}
+
+@Composable
+fun PhoneLoginScreen(
+    onSignedIn: () -> Unit
+) {
+    val context = LocalContext.current
+    val activity = remember(context) {
+        context.findActivity()
+    }
+
+    val auth = remember {
+        FirebaseAuth.getInstance()
+    }
+
+    var phoneNumber by remember { mutableStateOf("") }
+    var otp by remember { mutableStateOf("") }
+    var verificationId by remember { mutableStateOf<String?>(null) }
+    var otpSent by remember { mutableStateOf(false) }
+    var loading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    val latestOnSignedIn by rememberUpdatedState(onSignedIn)
+
+    val callbacks = remember(auth, activity) {
+        object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+
+            override fun onVerificationCompleted(
+                credential: com.google.firebase.auth.PhoneAuthCredential
+            ) {
+                loading = true
+
+                auth.signInWithCredential(credential)
+                    .addOnCompleteListener { task ->
+                        loading = false
+
+                        if (task.isSuccessful) {
+                            latestOnSignedIn()
+                        } else {
+                            errorMessage =
+                                task.exception?.localizedMessage
+                                    ?: "Phone sign-in failed."
+                        }
+                    }
+            }
+
+            override fun onVerificationFailed(
+                e: com.google.firebase.FirebaseException
+            ) {
+                loading = false
+                errorMessage =
+                    e.localizedMessage ?: "Phone verification failed."
+            }
+
+            override fun onCodeSent(
+                id: String,
+                token: PhoneAuthProvider.ForceResendingToken
+            ) {
+                verificationId = id
+                otpSent = true
+                loading = false
+                errorMessage = "Verification code sent. Check your SMS."
+            }
+
+            override fun onCodeAutoRetrievalTimeOut(id: String) {
+                verificationId = id
+                otpSent = true
+                loading = false
+            }
+        }
+    }
+
+    fun sendCode() {
+        val cleanNumber = phoneNumber.trim()
+
+        if (
+            !cleanNumber.startsWith("+") ||
+            cleanNumber.length < 8 ||
+            cleanNumber.length > 16
+        ) {
+            errorMessage =
+                "Enter your full phone number with country code, such as +919876543210."
+            return
+        }
+
+        if (activity == null) {
+            errorMessage = "Unable to open phone verification."
+            return
+        }
+
+        loading = true
+        errorMessage = ""
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(cleanNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
+    fun verifyCode() {
+        val id = verificationId
+
+        if (id == null) {
+            errorMessage = "Please request a verification code first."
+            return
+        }
+
+        if (otp.trim().length < 6) {
+            errorMessage = "Enter the verification code."
+            return
+        }
+
+        loading = true
+        errorMessage = ""
+
+        val credential =
+            PhoneAuthProvider.getCredential(id, otp.trim())
+
+        auth.signInWithCredential(credential)
+            .addOnCompleteListener { task ->
+                loading = false
+
+                if (task.isSuccessful) {
+                    latestOnSignedIn()
+                } else {
+                    errorMessage =
+                        task.exception?.localizedMessage
+                            ?: "Incorrect code. Please try again."
+                }
+            }
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                "VB",
+                style = MaterialTheme.typography.displayLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Text(
+                "Welcome to Voicebox",
+                style = MaterialTheme.typography.headlineSmall
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text("Sign in with your phone number")
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = {
+                    phoneNumber = it
+                    errorMessage = ""
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Phone number") },
+                placeholder = { Text("+919876543210") },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Phone
+                ),
+                singleLine = true,
+                enabled = !loading && !otpSent
+            )
+
+            if (otpSent) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = otp,
+                    onValueChange = {
+                        otp = it.filter { character ->
+                            character.isDigit()
+                        }.take(6)
+                        errorMessage = ""
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("SMS verification code") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    ),
+                    singleLine = true,
+                    enabled = !loading
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (!otpSent) {
+                Button(
+                    onClick = { sendCode() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !loading
+                ) {
+                    Text("Send verification code")
+                }
+            } else {
+                Button(
+                    onClick = { verifyCode() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !loading
+                ) {
+                    Text("Verify and sign in")
+                }
+
+                TextButton(
+                    onClick = {
+                        otp = ""
+                        verificationId = null
+                        otpSent = false
+                        sendCode()
+                    },
+                    enabled = !loading
+                ) {
+                    Text("Change number / Send another code")
+                }
+            }
+
+            if (loading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator()
+            }
+
+            if (errorMessage.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    errorMessage,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                "Use your full international phone number, including the + country code.",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainVBScreen() {
     val context = LocalContext.current
 
     val prefs = remember(context) {
@@ -293,7 +584,6 @@ fun VoiceboxApp() {
             }
         }
     ) { padding ->
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
