@@ -46,6 +46,9 @@ jobs:
         with:
           gradle-version: 8.9
 
+      - name: Generate VB SHA fingerprints
+        run: gradle signingReport
+
       - name: Build VB APK
         run: gradle assembleDebug --stacktrace
 
